@@ -19,39 +19,39 @@ export default function Signup() {
     if (error) {
       setError(error.message);
     } else {
-      router.push('/chat'); // Redirect to chat page after signup
+      router.push('/chat');
     }
   };
 
   return (
-    <div className="flex justify-center items-center h-screen">
-      <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6">Sign Up</h1>
+    <div className="flex justify-center items-center h-screen bg-gradient-to-br from-gray-900 to-blue-900">
+      <div className="bg-gray-800/80 p-8 rounded-lg shadow-lg w-full max-w-md backdrop-blur-sm">
+        <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">Sign Up</h1>
         <input
           type="email"
-          placeholder="Email"
+          placeholder="Enter your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full p-2 mb-4 border rounded"
+          className="w-full p-3 mb-4 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:outline-none placeholder-gray-400 italic"
         />
         <input
           type="password"
-          placeholder="Password"
+          placeholder="Choose a password (min 6 characters)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full p-2 mb-4 border rounded"
+          className="w-full p-3 mb-4 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:outline-none placeholder-gray-400 italic"
         />
-        {error && <p className="text-red-500 mb-4">{error}</p>}
+        {error && <p className="text-red-400 mb-4 text-center font-medium">{error}</p>}
         <button
           onClick={handleSignup}
-          className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+          className="w-full bg-cyan-500 text-gray-900 p-3 rounded-lg glow-button hover:bg-cyan-400 transition-colors font-semibold"
         >
           Sign Up
         </button>
-        <p className="mt-4 text-center">
+        <p className="mt-4 text-center text-gray-300">
           Already have an account?{' '}
-          <a href="/login" className="text-blue-600 hover:underline">
-            Log in
+          <a href="/login" className="text-cyan-400 hover:underline">
+            Log In
           </a>
         </p>
       </div>

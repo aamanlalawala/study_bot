@@ -1,36 +1,48 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 export default function Chat() {
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [chatLoading, setChatLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Load chat history and check user
   useEffect(() => {
     async function loadChat() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      setChatLoading(true);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setError('Failed to authenticate user');
         router.push('/login');
+        setChatLoading(false);
         return;
       }
 
-      // Load chat from Supabase
       const { data, error } = await supabase
         .from('chats')
         .select('messages')
         .eq('user_id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+      if (error && error.code !== 'PGRST116') {
         setError('Failed to load chat: ' + error.message);
       } else if (data) {
         setMessages(data.messages || []);
       }
+      setChatLoading(false);
     }
     loadChat();
   }, [router]);
@@ -58,7 +70,6 @@ export default function Chat() {
       } else {
         const updatedMessages = [...newMessages, { role: 'ai', content: data.reply }];
         setMessages(updatedMessages);
-        // Auto-save after AI response
         await saveChat(updatedMessages);
       }
     } catch (err) {
@@ -79,7 +90,7 @@ export default function Chat() {
         user_id: user.id,
         messages: chatMessages,
         updated_at: new Date().toISOString(),
-      });
+      }, { onConflict: 'user_id' });  // Explicitly specify onConflict for unique user_id
 
     if (error) {
       setError('Failed to save chat: ' + error.message);
@@ -117,52 +128,90 @@ export default function Chat() {
     router.push('/login');
   };
 
+  // Handle study tips preset
+  const handleStudyTips = () => {
+    setInput('Give me study tips for CS exams');
+  };
+
+  // Render Markdown safely
+  const renderMarkdown = (text: string) => {
+    // Handle both Promise and string return types from marked
+    const htmlOrPromise = marked(text);
+    if (typeof htmlOrPromise === 'string') {
+      return { __html: DOMPurify.sanitize(htmlOrPromise) };
+    } else if (htmlOrPromise instanceof Promise) {
+      return { __html: '' };
+    }
+    return { __html: '' };
+  };
+
   return (
-    <div className="flex flex-col h-screen max-w-3xl mx-auto p-4">
+    <div className="flex flex-col h-screen max-w-4xl mx-auto p-4 bg-gradient-to-br from-gray-900 to-blue-900">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Study Chatbot</h1>
+        <h1 className="text-3xl font-bold text-cyan-400">Study Chatbot</h1>
         <button
           onClick={handleLogout}
-          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          className="bg-red-500 text-gray-900 px-4 py-2 rounded-lg glow-button hover:bg-red-400 transition-colors"
         >
           Logout
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto mb-4 p-4 bg-gray-100 rounded-lg shadow">
-        {messages.length === 0 && !loading && (
-          <p className="text-gray-500 text-center">
-            Start by asking a CS or study question!
+      <div className="flex-1 overflow-y-auto mb-4 p-4 bg-gray-800/80 rounded-lg shadow-lg backdrop-blur-sm">
+        {chatLoading && (
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-cyan-400"></div>
+          </div>
+        )}
+        {!chatLoading && messages.length === 0 && !loading && (
+          <p className="text-gray-300 text-center text-lg">
+            Ask a CS or study question to get started!
           </p>
         )}
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`mb-3 p-3 rounded-lg max-w-[80%] ${
-              msg.role === 'user'
-                ? 'bg-blue-500 text-white ml-auto'
-                : 'bg-white text-gray-800'
-            }`}
-          >
-            <strong>{msg.role === 'user' ? 'You' : 'AI'}:</strong> {msg.content}
-          </div>
-        ))}
+        {!chatLoading &&
+          messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`mb-4 p-4 rounded-lg max-w-[80%] shadow-sm transition-all duration-200 hover:shadow-[0_0_10px_rgba(34,211,238,0.3)] ${
+                msg.role === 'user'
+                  ? 'bg-cyan-600 text-gray-100 ml-auto'
+                  : 'bg-gray-700 text-gray-100'
+              }`}
+            >
+              <strong className="block font-semibold">
+                {msg.role === 'user' ? 'You' : 'AI'}:
+              </strong>
+              <div
+                className="mt-1 whitespace-pre-wrap"
+                dangerouslySetInnerHTML={renderMarkdown(msg.content)}
+              />
+            </div>
+          ))}
         {loading && (
-          <p className="text-gray-500 text-center animate-pulse">Thinking...</p>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-cyan-400"></div>
+          </div>
         )}
-        {error && <p className="text-red-500 text-center">{error}</p>}
+        {error && <p className="text-red-400 text-center font-medium">{error}</p>}
+        <div ref={messagesEndRef} />
       </div>
       <div className="flex gap-2 mb-4">
         <button
           onClick={handleReset}
-          className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+          className="bg-gray-500 text-gray-100 px-4 py-2 rounded-lg glow-button hover:bg-gray-400 transition-colors"
         >
           Reset
         </button>
         <button
           onClick={handleSave}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          className="bg-green-500 text-gray-900 px-4 py-2 rounded-lg glow-button hover:bg-green-400 transition-colors"
         >
           Save
+        </button>
+        <button
+          onClick={handleStudyTips}
+          className="bg-purple-500 text-gray-900 px-4 py-2 rounded-lg glow-button hover:bg-purple-400 transition-colors"
+        >
+          Study Tips
         </button>
       </div>
       <div className="flex gap-2">
@@ -170,14 +219,14 @@ export default function Chat() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+          onKeyPress={(e) => e.key === 'Enter' && !loading && handleSend()}
           placeholder="Ask about CS or study tips..."
-          className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 p-3 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:outline-none placeholder-gray-400 italic"
         />
         <button
           onClick={handleSend}
           disabled={loading}
-          className="bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+          className="bg-cyan-500 text-gray-900 px-6 py-3 rounded-lg glow-button hover:bg-cyan-400 disabled:bg-gray-500 transition-colors"
         >
           Send
         </button>
